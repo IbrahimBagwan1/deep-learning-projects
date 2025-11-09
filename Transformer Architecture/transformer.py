@@ -401,7 +401,7 @@ def train_step(inp, tar):
     combined_mask = tf.maximum(dec_target_padding_mask, look_ahead_mask)
 
     with tf.GradientTape() as tape:
-        predictions, _ = transformer(inp, tar_inp, True, enc_padding_mask, combined_mask, dec_padding_mask)
+        predictions, _ = transformer(inp, tar_inp, training=True, enc_padding_mask=enc_padding_mask, look_ahead_mask=combined_mask, dec_padding_mask=dec_padding_mask)
         loss = loss_function(tar_real, predictions)
 
     gradients = tape.gradient(loss, transformer.trainable_variables)
@@ -450,27 +450,17 @@ def evaluate(sentence):
         look_ahead_mask = create_look_ahead_mask(tf.shape(output)[1])
         dec_padding_mask = create_padding_mask(encoder_input)
 
-        predictions, attention_weights = transformer(
-            encoder_input,
-            output,
-            False,
-            enc_padding_mask,
-            look_ahead_mask,
-            dec_padding_mask
-        )
+        predictions, attention_weights = transformer(encoder_input, output, training=False, enc_padding_mask=enc_padding_mask, look_ahead_mask=look_ahead_mask, dec_padding_mask=dec_padding_mask)
 
         predictions = predictions[:, -1:, :]  # (batch_size, 1, vocab)
         predicted_id = tf.cast(tf.argmax(predictions, axis=-1), tf.int32)
+        # convert to python int for control flow
         pred_id_val = int(predicted_id[0, 0].numpy())
-
-        # if end token, stop
         if pred_id_val == (train_subwords_tgt.vocab_size + 1):
             break
-
         output = tf.concat([output, [[pred_id_val]]], axis=-1)
 
     return tf.squeeze(output, axis=0).numpy()
-
 
 def translate(sentence):
     result_tokens = evaluate(sentence)
